@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -23,9 +23,15 @@ const FormSchema = z.object({
 
 interface BullyingDetectionFormProps {
   onNewDetection: (result: DetectBullyingOutput & { originalText: string }) => void;
+  currentTranscript?: string;
+  onTranscriptConsumed?: () => void;
 }
 
-export function BullyingDetectionForm({ onNewDetection }: BullyingDetectionFormProps) {
+export function BullyingDetectionForm({ 
+  onNewDetection, 
+  currentTranscript,
+  onTranscriptConsumed 
+}: BullyingDetectionFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<DetectBullyingOutput | null>(null);
   const { toast } = useToast();
@@ -33,9 +39,15 @@ export function BullyingDetectionForm({ onNewDetection }: BullyingDetectionFormP
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      text: "",
+      text: currentTranscript || "",
     },
   });
+
+  useEffect(() => {
+    if (currentTranscript !== undefined) {
+      form.setValue("text", currentTranscript);
+    }
+  }, [currentTranscript, form]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     setIsLoading(true);
@@ -49,7 +61,10 @@ export function BullyingDetectionForm({ onNewDetection }: BullyingDetectionFormP
         description: result.isBullying ? "Potential bullying detected." : "No bullying detected.",
         variant: result.isBullying ? "destructive" : "default",
       });
-      form.reset(); // Optionally reset form
+      form.reset({ text: "" }); // Clear form after submission
+      if (onTranscriptConsumed) {
+        onTranscriptConsumed(); // Notify parent that transcript has been used
+      }
     } catch (error) {
       console.error("Error detecting bullying:", error);
       toast({
@@ -68,7 +83,7 @@ export function BullyingDetectionForm({ onNewDetection }: BullyingDetectionFormP
         <CardTitle>Analyze Text for Bullying</CardTitle>
         <CardDescription>
           Enter text from SMS, social media, or other sources to check for potential bullying.
-          You can also upload screenshots (feature coming soon).
+          You can also use the "Speak to Analyze" button to input text via voice.
         </CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -83,7 +98,7 @@ export function BullyingDetectionForm({ onNewDetection }: BullyingDetectionFormP
                   <FormControl>
                     <Textarea
                       id="text-input"
-                      placeholder="Paste text here..."
+                      placeholder="Paste text here, or use the 'Speak to Analyze' button..."
                       className="min-h-[100px] resize-y"
                       {...field}
                       disabled={isLoading}
