@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { PLACEHOLDER_USER } from "@/lib/constants";
+import { CheckCircle, WifiOff } from "lucide-react"; // Example icons
 
 export default function SettingsPage() {
+  // In a real app, this would come from user settings or API
+  const isHealthConnectSimulated = true; 
+
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
       <div>
@@ -62,6 +66,16 @@ export default function SettingsPage() {
             </Label>
             <Switch id="activitySummary" />
           </div>
+           <Separator />
+          <div className="flex items-center justify-between">
+            <Label htmlFor="healthAlerts" className="flex flex-col space-y-1">
+              <span>Critical Health Alerts</span>
+              <span className="font-normal leading-snug text-muted-foreground">
+                Notifications for unusual health readings (e.g., very high heart rate).
+              </span>
+            </Label>
+            <Switch id="healthAlerts" defaultChecked />
+          </div>
         </CardContent>
       </Card>
       
@@ -72,13 +86,23 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="flex items-center justify-between">
-            <Label htmlFor="googleFit" className="flex flex-col space-y-1">
-              <span>Google Fit / Apple Health</span>
+            <Label htmlFor="healthConnect" className="flex flex-col space-y-1">
+              <span>Health Connect (Simulated)</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                Sync activity and health data.
+                Sync activity and health data from smartwatch via phone.
               </span>
             </Label>
-            <Button variant="outline" disabled>Connect (Placeholder)</Button>
+            {isHealthConnectSimulated ? (
+              <Button variant="outline" disabled className="cursor-not-allowed">
+                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                Connected (Simulated)
+              </Button>
+            ) : (
+               <Button variant="outline" disabled>
+                <WifiOff className="mr-2 h-4 w-4" />
+                Connect (Placeholder)
+              </Button>
+            )}
           </div>
           <Separator />
            <div className="flex items-center justify-between">

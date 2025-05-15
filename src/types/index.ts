@@ -46,3 +46,13 @@ export interface HeartRateData {
   daily: HealthDataPoint[];
   weekly: HealthDataPoint[];
 }
+
+// New type for simulated Health Connect data
+export interface SimulatedHealthConnectData {
+  liveHeartRate: number;
+  dailySteps: number;
+  lastSleepDuration: number; // hours
+  bodyTemperature?: number; // Celsius, optional
+  spo2?: number; // Percentage, optional
+  lastUpdated: string; // ISO string timestamp
+}
