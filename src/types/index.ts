@@ -1,5 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
+import type { z } from 'zod';
 
 export interface NavItem {
   href: string;
@@ -47,7 +48,6 @@ export interface HeartRateData {
   weekly: HealthDataPoint[];
 }
 
-// New type for simulated Health Connect data
 export interface SimulatedHealthConnectData {
   liveHeartRate: number;
   dailySteps: number;
@@ -56,3 +56,28 @@ export interface SimulatedHealthConnectData {
   spo2?: number; // Percentage, optional
   lastUpdated: string; // ISO string timestamp
 }
+
+// Form input types
+export type LoginFormInputs = {
+  email: string;
+  password: string;
+};
+
+export type SignupFormInputs = {
+  parentName: string;
+  childName: string; // Consider making this optional or handling its storage separately
+  email: string;
+  password: string;
+};
+
+// Example Zod schema for reference if needed elsewhere, though defined in pages
+// export const loginFormSchema = z.object({
+//   email: z.string().email(),
+//   password: z.string().min(6),
+// });
+// export const signupFormSchema = z.object({
+//   parentName: z.string().min(2),
+//   childName: z.string().min(1), // Or optional: z.string().optional()
+//   email: z.string().email(),
+//   password: z.string().min(6),
+// });

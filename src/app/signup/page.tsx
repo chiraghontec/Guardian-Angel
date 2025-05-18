@@ -1,13 +1,75 @@
 
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { AppLogo } from '@/components/icons/app-logo';
 import { APP_NAME } from '@/lib/constants';
+import { useAuth } from '@/contexts/auth-context';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+const signupFormSchema = z.object({
+  parentName: z.string().min(2, { message: "Parent's name must be at least 2 characters." }),
+  childName: z.string().min(2, { message: "Child's name must be at least 2 characters." }), // Can be made optional if needed
+  email: z.string().email({ message: "Invalid email address." }),
+  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+});
+
+type SignupFormInputs = z.infer<typeof signupFormSchema>;
 
 export default function SignupPage() {
+  const { signup, loading: authLoading, error: authError, setError: setAuthError, currentUser } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const form = useForm<SignupFormInputs>({
+    resolver: zodResolver(signupFormSchema),
+    defaultValues: {
+      parentName: "",
+      childName: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      router.push('/dashboard');
+    }
+  }, [currentUser, router]);
+
+  useEffect(() => {
+    if (authError) {
+      toast({
+        variant: "destructive",
+        title: "Signup Failed",
+        description: authError,
+      });
+      setAuthError(null); // Clear error after showing toast
+    }
+  }, [authError, toast, setAuthError]);
+
+  async function onSubmit(data: SignupFormInputs) {
+    await signup(data);
+  }
+
+  if (currentUser) {
+     return (
+       <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-2xl">
@@ -18,27 +80,68 @@ export default function SignupPage() {
           <CardTitle className="text-3xl font-bold">{APP_NAME}</CardTitle>
           <CardDescription>Create an account to start monitoring your child's wellbeing.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="parentName">Parent's Name</Label>
-            <Input id="parentName" placeholder="Sarah Connor" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="childName">Child's Name</Label>
-            <Input id="childName" placeholder="John" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="parent@example.com" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" />
-          </div>
-          <Button type="submit" className="w-full">
-            Create Account
-          </Button>
-        </CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="parentName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent's Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Sarah Connor" {...field} disabled={authLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="childName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Child's Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John" {...field} disabled={authLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="parent@example.com" {...field} disabled={authLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} disabled={authLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" className="w-full" disabled={authLoading}>
+                {authLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Account
+              </Button>
+            </CardContent>
+          </form>
+        </Form>
         <CardFooter className="text-center text-sm">
           Already have an account?{' '}
           <Link href="/login" className="underline text-primary hover:text-primary/80">

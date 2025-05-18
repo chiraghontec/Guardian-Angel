@@ -3,8 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { APP_NAME, NAV_ITEMS_MAIN, NAV_ITEMS_FOOTER, PLACEHOLDER_USER } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { APP_NAME, NAV_ITEMS_MAIN, NAV_ITEMS_FOOTER } from "@/lib/constants";
 import {
   Sidebar,
   SidebarHeader,
@@ -16,12 +15,23 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { AppLogo } from "@/components/icons/app-logo";
-import { LogOut } from "lucide-react";
+import { LogOut, UserCircle2 } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { currentUser, logout, loading: authLoading } = useAuth();
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return "?";
+    const names = name.split(' ');
+    if (names.length > 1) {
+      return names[0][0] + names[names.length - 1][0];
+    }
+    return name.substring(0, 2);
+  };
 
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left" className="border-r">
@@ -43,6 +53,7 @@ export function SidebarNav() {
                 isActive={pathname.startsWith(item.href)}
                 tooltip={item.label}
                 className="justify-start"
+                disabled={authLoading}
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
@@ -63,6 +74,7 @@ export function SidebarNav() {
                 isActive={pathname.startsWith(item.href)}
                 tooltip={item.label}
                 className="justify-start"
+                disabled={authLoading}
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
@@ -77,12 +89,8 @@ export function SidebarNav() {
                 variant="ghost"
                 className="justify-start w-full group-data-[collapsible=icon]:justify-center"
                 tooltip="Logout"
-                onClick={() => {
-                  // Placeholder for logout logic
-                  // Typically, you would redirect to /login or call an API
-                  console.log("Logout clicked");
-                  // router.push('/login'); // if using useRouter
-                }}
+                onClick={logout}
+                disabled={authLoading}
               >
                 <LogOut className="h-5 w-5" />
                 <span className="group-data-[collapsible=icon]:hidden">Logout</span>
@@ -91,14 +99,46 @@ export function SidebarNav() {
         </SidebarMenu>
         
         <div className="flex items-center gap-3 p-2 mt-4 rounded-lg bg-muted group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mt-2">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={PLACEHOLDER_USER.avatar} alt={PLACEHOLDER_USER.name} data-ai-hint="profile person" />
-            <AvatarFallback>{PLACEHOLDER_USER.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="group-data-[collapsible=icon]:hidden">
-            <p className="text-sm font-semibold">{PLACEHOLDER_USER.name}</p>
-            <p className="text-xs text-muted-foreground">{PLACEHOLDER_USER.email}</p>
-          </div>
+          {authLoading ? (
+            <>
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="group-data-[collapsible=icon]:hidden space-y-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </>
+          ) : currentUser ? (
+            <>
+              <Avatar className="h-10 w-10">
+                {currentUser.photoURL ? (
+                  <AvatarImage src={currentUser.photoURL} alt={currentUser.displayName || currentUser.email || 'User'} data-ai-hint="profile person" />
+                ) : (
+                   <UserCircle2 className="h-10 w-10 text-muted-foreground" /> // Placeholder icon
+                )}
+                <AvatarFallback>{getInitials(currentUser.displayName || currentUser.email)}</AvatarFallback>
+              </Avatar>
+              <div className="group-data-[collapsible=icon]:hidden">
+                <p className="text-sm font-semibold truncate max-w-[150px]" title={currentUser.displayName || currentUser.email || undefined}>
+                  {currentUser.displayName || currentUser.email}
+                </p>
+                {currentUser.displayName && currentUser.email && (
+                  <p className="text-xs text-muted-foreground truncate max-w-[150px]" title={currentUser.email}>
+                    {currentUser.email}
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+             <>
+              <Avatar className="h-10 w-10">
+                 <UserCircle2 className="h-10 w-10 text-muted-foreground" />
+                <AvatarFallback>??</AvatarFallback>
+              </Avatar>
+              <div className="group-data-[collapsible=icon]:hidden">
+                <p className="text-sm font-semibold">Not Logged In</p>
+              </div>
+            </>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>

@@ -6,12 +6,13 @@ import { HeartRateWidget } from '@/components/health/heart-rate-widget';
 import { HealthTrendsChart } from '@/components/health/health-trends-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { HealthDataPoint, SimulatedHealthConnectData } from '@/types';
-import { PLACEHOLDER_USER } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Thermometer, Activity, Droplet } from 'lucide-react'; // Activity for steps, Droplet for SpO2
+import { Thermometer, Droplet } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useAuth } from '@/contexts/auth-context'; // Use auth context
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Generate placeholder historical data (can be kept or removed if API provides history)
+
 const generateHistoricalHealthData = (numPoints: number, minVal: number, maxVal: number, timePrefix: string = ""): HealthDataPoint[] => {
   return Array.from({ length: numPoints }, (_, i) => ({
     time: `${timePrefix}${i + 1}`,
@@ -42,22 +43,22 @@ const generateHistoricalWeeklyHeartRateData = (): HealthDataPoint[] => {
 export default function HealthPage() {
   const [healthData, setHealthData] = useState<SimulatedHealthConnectData | null>(null);
   const [lastUpdatedText, setLastUpdatedText] = useState<string>("never");
-
-  // Historical data states (can be replaced if API provides historical trends)
   const [historicalDailyHeartRate, setHistoricalDailyHeartRate] = useState<HealthDataPoint[]>([]);
   const [historicalWeeklyHeartRate, setHistoricalWeeklyHeartRate] = useState<HealthDataPoint[]>([]);
   const [historicalSleepData, setHistoricalSleepData] = useState<HealthDataPoint[]>([]);
   const [historicalStressData, setHistoricalStressData] = useState<HealthDataPoint[]>([]);
-  
   const [isClient, setIsClient] = useState(false);
+  const { childNameContext } = useAuth(); // Get childName from context
+
+  const currentChildName = childNameContext || "your child";
+
 
   useEffect(() => {
     setIsClient(true);
-    // Initialize historical data (can be fetched if API supports it)
     setHistoricalDailyHeartRate(generateHistoricalDailyHeartRateData());
     setHistoricalWeeklyHeartRate(generateHistoricalWeeklyHeartRateData());
-    setHistoricalSleepData(generateHistoricalHealthData(7, 5, 10, "Day ")); // Sleep hours
-    setHistoricalStressData(generateHistoricalHealthData(7, 20, 80, "Day ")); // Stress level 0-100
+    setHistoricalSleepData(generateHistoricalHealthData(7, 5, 10, "Day ")); 
+    setHistoricalStressData(generateHistoricalHealthData(7, 20, 80, "Day "));
   }, []);
 
   const fetchHealthData = async () => {
@@ -71,15 +72,14 @@ export default function HealthPage() {
       setLastUpdatedText(formatDistanceToNow(new Date(data.lastUpdated), { addSuffix: true }));
     } catch (error) {
       console.error("Failed to fetch health data:", error);
-      // Optionally, set an error state and display it in the UI
     }
   };
 
   useEffect(() => {
     if (isClient) {
-      fetchHealthData(); // Initial fetch
-      const intervalId = setInterval(fetchHealthData, 30000); // Poll every 30 seconds
-      return () => clearInterval(intervalId); // Cleanup on unmount
+      fetchHealthData(); 
+      const intervalId = setInterval(fetchHealthData, 30000); 
+      return () => clearInterval(intervalId); 
     }
   }, [isClient]);
   
@@ -87,7 +87,7 @@ export default function HealthPage() {
     if (healthData?.lastUpdated) {
        const updateTimer = setInterval(() => {
          setLastUpdatedText(formatDistanceToNow(new Date(healthData.lastUpdated), { addSuffix: true }));
-       }, 60000); // Update "last updated" text every minute
+       }, 60000); 
        return () => clearInterval(updateTimer);
     }
   }, [healthData?.lastUpdated]);
@@ -97,17 +97,16 @@ export default function HealthPage() {
      return (
       <div className="space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Health Metrics</h1>
-        <p className="text-muted-foreground">Loading health data for {PLACEHOLDER_USER.childName}...</p>
-        {/* Basic skeleton loader for key metrics */}
+        <p className="text-muted-foreground">Loading health data for {currentChildName}...</p>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="shadow-lg">
               <CardHeader className="pb-2">
-                <CardTitle className="h-4 bg-muted rounded w-3/4"></CardTitle>
+                <Skeleton className="h-5 w-3/4 rounded" />
               </CardHeader>
               <CardContent>
-                <div className="h-8 bg-muted rounded w-1/2 mb-1"></div>
-                <div className="h-3 bg-muted rounded w-1/4"></div>
+                <Skeleton className="h-8 w-1/2 mb-1 rounded" />
+                <Skeleton className="h-4 w-1/4 rounded" />
               </CardContent>
             </Card>
           ))}
@@ -122,7 +121,7 @@ export default function HealthPage() {
         <h1 className="text-3xl font-bold tracking-tight">Health Metrics</h1>
         <div className="flex justify-between items-center">
            <p className="text-muted-foreground">
-            Overview of {PLACEHOLDER_USER.childName}'s health indicators from simulated Health Connect.
+            Overview of {currentChildName}'s health indicators from simulated Health Connect.
           </p>
           <p className="text-xs text-muted-foreground">
             Last updated: {lastUpdatedText}
@@ -136,7 +135,6 @@ export default function HealthPage() {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Average Sleep</CardTitle>
-            {/* Icon can be added here if desired */}
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{healthData.lastSleepDuration.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">hrs</span></div>
@@ -171,7 +169,6 @@ export default function HealthPage() {
         )}
       </div>
 
-      {/* Historical Data Charts - these still use generated data but could be adapted for API-driven history */}
       <Tabs defaultValue="heartRate">
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="heartRate">Heart Rate Trends</TabsTrigger>
@@ -185,7 +182,7 @@ export default function HealthPage() {
               data={historicalDailyHeartRate}
               title="Historical Daily Heart Rate"
               description="Average BPM throughout a sample day."
-              dataKey="bpm"
+              dataKey="value" // Changed to 'value' as per HealthDataPoint
               color="hsl(var(--destructive))"
               unit="bpm"
             />
@@ -193,7 +190,7 @@ export default function HealthPage() {
               data={historicalWeeklyHeartRate}
               title="Historical Weekly Heart Rate Avg."
               description="Average BPM over a sample week."
-              dataKey="bpm"
+              dataKey="value" // Changed to 'value'
               color="hsl(var(--primary))"
               unit="bpm"
             />
@@ -204,7 +201,7 @@ export default function HealthPage() {
               data={historicalSleepData}
               title="Historical Weekly Sleep Duration"
               description="Hours of sleep per night over a sample week."
-              dataKey="sleep"
+              dataKey="value" // Changed to 'value'
               color="hsl(var(--secondary))"
               unit="hrs"
             />
@@ -214,7 +211,7 @@ export default function HealthPage() {
               data={historicalStressData}
               title="Historical Weekly Stress Levels"
               description="Estimated stress levels (HRV-based) over a sample week."
-              dataKey="stress"
+              dataKey="value" // Changed to 'value'
               color="hsl(var(--accent))"
               unit=""
             />

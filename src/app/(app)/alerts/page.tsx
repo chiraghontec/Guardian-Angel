@@ -11,8 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { PLACEHOLDER_USER } from '@/lib/constants';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAuth } from '@/contexts/auth-context'; // Use auth context
 
 // Check for SpeechRecognition API
 const SpeechRecognition = (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition));
@@ -25,6 +25,9 @@ export default function AlertsPage() {
   const [transcript, setTranscript] = useState<string>("");
   const [recognitionInstance, setRecognitionInstance] = useState<SpeechRecognition | null>(null);
   const { toast } = useToast();
+  const { childNameContext } = useAuth(); // Get childName from context
+
+  const currentChildName = childNameContext || "your child";
 
   useEffect(() => {
     setIsClient(true);
@@ -58,17 +61,18 @@ export default function AlertsPage() {
             interimTranscript += event.results[i][0].transcript;
           }
         }
-        setTranscript(prev => prev.split(' ').slice(0, -1).join(' ') + (prev ? ' ' : '') + finalTranscript + interimTranscript);
-         // If final, set the transcript and stop listening for this phrase
+        // Prefer final transcript, fallback to building up if needed.
+        // For this use case, let's prioritize the most recent final transcript.
         if (finalTranscript.trim()) {
-            setTranscript(currentFinal => {
-                // This logic attempts to merge final transcripts if recognition fires multiple times quickly.
-                // For simple use, `finalTranscript` might be enough if `continuous` is false.
-                // However, this example tries to build up a more complete phrase.
-                // For a single phrase, we'd likely reset transcript before new final result.
-                // Here, we'll just use the latest final transcript.
-                return finalTranscript;
-            });
+             setTranscript(finalTranscript);
+        } else if (interimTranscript.trim()) {
+            // Update with interim if no final yet, or if continuous was true.
+            // This logic could be refined based on desired UX for ongoing speech.
+             setTranscript(prev => {
+                // A simple append might be too noisy. Let's replace for now.
+                // Or try a smarter merge if needed.
+                return interimTranscript; 
+             });
         }
       };
 
@@ -93,7 +97,7 @@ export default function AlertsPage() {
       };
       
       setRecognitionInstance(recognition);
-    } else {
+    } else if (isClient) { // Only set error if on client and API is missing
       setSpeechError("Speech recognition is not supported by your browser.");
     }
 
@@ -103,7 +107,7 @@ export default function AlertsPage() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient]); // Only run on client mount and when recognitionInstance is first set up
+  }, [isClient]); 
 
   const toggleListening = useCallback(() => {
     if (!SpeechRecognition || !recognitionInstance) {
@@ -115,13 +119,12 @@ export default function AlertsPage() {
       recognitionInstance.stop();
       setIsListening(false);
     } else {
-      setTranscript(""); // Clear previous transcript
+      setTranscript(""); 
       setSpeechError(null);
       try {
         recognitionInstance.start();
         setIsListening(true);
       } catch (error) {
-        // This catch might be for errors during .start() itself, though .onerror usually handles recognition issues
         console.error("Error starting speech recognition:", error);
         setSpeechError("Could not start speech recognition. Ensure microphone permissions are granted.");
         toast({ title: "Error", description: "Could not start speech recognition.", variant: "destructive" });
@@ -146,14 +149,14 @@ export default function AlertsPage() {
       explanation: result.explanation,
     };
     setIncidents(prevIncidents => [newIncident, ...prevIncidents]);
-    setTranscript(""); // Clear transcript after successful submission
+    setTranscript(""); 
   };
 
   if (!isClient) {
     return (
       <div className="space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Bullying Alerts</h1>
-        <p className="text-muted-foreground">Loading alerts for {PLACEHOLDER_USER.childName}...</p>
+        <p className="text-muted-foreground">Loading alerts for {currentChildName}...</p>
       </div>
     );
   }
@@ -163,7 +166,7 @@ export default function AlertsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Bullying Alerts</h1>
         <p className="text-muted-foreground">
-          Monitor and analyze potential bullying incidents for {PLACEHOLDER_USER.childName}.
+          Monitor and analyze potential bullying incidents for {currentChildName}.
         </p>
       </div>
       
@@ -198,7 +201,7 @@ export default function AlertsPage() {
       <BullyingDetectionForm 
         onNewDetection={handleNewDetection} 
         currentTranscript={transcript}
-        onTranscriptConsumed={() => setTranscript("")} // Reset transcript in parent after form consumes it
+        onTranscriptConsumed={() => setTranscript("")}
       />
 
       <div className="flex-grow flex flex-col min-h-0 mt-8">

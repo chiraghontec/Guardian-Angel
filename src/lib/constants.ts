@@ -1,6 +1,6 @@
 
 import type { NavItem } from '@/types';
-import { LayoutDashboard, MessageSquareWarning, Heart, Settings, LogOut, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, MessageSquareWarning, Heart, Settings } from 'lucide-react';
 
 export const APP_NAME = "Guardian Angel";
 
@@ -12,14 +12,16 @@ export const NAV_ITEMS_MAIN: NavItem[] = [
 
 export const NAV_ITEMS_FOOTER: NavItem[] = [
   { href: '/settings', label: 'Settings', icon: Settings },
-  // { href: '/logout', label: 'Logout', icon: LogOut }, // Logout would typically be a function call
 ];
 
+// PLACEHOLDER_USER is less relevant now for parent's direct info
+// but childName might still be used as a placeholder in some UIs
+// until a proper data store for child profiles is implemented.
 export const PLACEHOLDER_USER = {
-  name: "Sarah Connor",
-  email: "sarah@example.com",
-  avatar: "https://placehold.co/100x100.png",
-  childName: "John",
+  // name: "Sarah Connor", // Will come from auth currentUser.displayName
+  // email: "sarah@example.com", // Will come from auth currentUser.email
+  // avatar: "https://placehold.co/100x100.png", // Will come from auth currentUser.photoURL
+  childName: "John", // This could be fetched or managed via AuthContext/Firestore later
 };
 
 export const DEFAULT_ACTIVITY_GOALS = {

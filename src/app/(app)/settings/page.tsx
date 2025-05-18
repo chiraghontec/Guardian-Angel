@@ -1,16 +1,105 @@
 
+"use client";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { PLACEHOLDER_USER } from "@/lib/constants";
-import { CheckCircle, WifiOff } from "lucide-react"; // Example icons
+import { CheckCircle, WifiOff, Loader2 } from "lucide-react"; 
+import { useAuth } from "@/contexts/auth-context";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useEffect, useState } from "react";
+import { updateProfile } from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
+import { useToast } from "@/hooks/use-toast";
+
+const settingsFormSchema = z.object({
+  parentName: z.string().min(1, "Parent's name cannot be empty."),
+  email: z.string().email("Invalid email address.").optional(), // Email usually not changed here or requires verification
+  childName: z.string().min(1, "Child's name cannot be empty."),
+});
+
+type SettingsFormInputs = z.infer<typeof settingsFormSchema>;
 
 export default function SettingsPage() {
-  // In a real app, this would come from user settings or API
+  const { currentUser, childNameContext, setChildNameContext, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const form = useForm<SettingsFormInputs>({
+    resolver: zodResolver(settingsFormSchema),
+    defaultValues: {
+      parentName: "",
+      email: "",
+      childName: "",
+    },
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      form.reset({
+        parentName: currentUser.displayName || "",
+        email: currentUser.email || "",
+        childName: childNameContext || "",
+      });
+    }
+  }, [currentUser, childNameContext, form]);
+
+  const onSubmit = async (data: SettingsFormInputs) => {
+    if (!currentUser) {
+      toast({ title: "Error", description: "You must be logged in to save settings.", variant: "destructive" });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      // Update display name in Firebase Auth
+      if (data.parentName !== currentUser.displayName) {
+        await updateProfile(currentUser, { displayName: data.parentName });
+      }
+      // Update childName in context (in real app, save to DB)
+      setChildNameContext(data.childName);
+
+      // Manually refresh currentUser in auth context if needed, or re-fetch from auth object
+      // For now, Firebase's onAuthStateChanged should pick up displayName change eventually.
+      // Or: auth.currentUser && setCurrentUser(auth.currentUser) // if setCurrentUser is exposed by useAuth
+
+      toast({ title: "Success", description: "Settings saved successfully!" });
+    } catch (error: any) {
+      toast({ title: "Error Saving Settings", description: error.message || "Could not save settings.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   const isHealthConnectSimulated = true; 
+
+  if (authLoading || !currentUser) {
+    return (
+      <div className="space-y-8 max-w-2xl mx-auto">
+        <Skeleton className="h-10 w-1/3" />
+        <Skeleton className="h-6 w-1/2" />
+        {[...Array(3)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-6 w-1/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-1/3" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
@@ -19,27 +108,62 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Manage your account and app preferences.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>Update your personal information.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="name">Parent's Name</Label>
-            <Input id="name" defaultValue={PLACEHOLDER_USER.name} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" defaultValue={PLACEHOLDER_USER.email} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="childName">Child's Name</Label>
-            <Input id="childName" defaultValue={PLACEHOLDER_USER.childName} />
-          </div>
-          <Button>Save Changes</Button>
-        </CardContent>
-      </Card>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile</CardTitle>
+              <CardDescription>Update your personal information.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="parentName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent's Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isSaving} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} disabled /> 
+                    </FormControl>
+                    <FormMessage />
+                     <p className="text-xs text-muted-foreground pt-1">Email address cannot be changed here.</p>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="childName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Child's Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isSaving} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" disabled={isSaving}>
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </CardContent>
+          </Card>
+        </form>
+      </Form>
 
       <Card>
         <CardHeader>

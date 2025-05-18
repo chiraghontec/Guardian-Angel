@@ -27,12 +27,19 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function ActivityChart() {
+interface ActivityChartProps {
+  childName?: string; // Optional: To customize description
+}
+
+export function ActivityChart({ childName }: ActivityChartProps) {
+  const descriptionText = childName 
+    ? `${childName}'s steps and calories burned over the last week.`
+    : "Steps and calories burned over the last week.";
   return (
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle>Weekly Activity</CardTitle>
-        <CardDescription>Your steps and calories burned over the last week.</CardDescription>
+        <CardDescription>{descriptionText}</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[300px] w-full">

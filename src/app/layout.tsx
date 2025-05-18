@@ -1,10 +1,10 @@
 
 import type {Metadata} from 'next';
-import { Inter } from 'next/font/google'; // Using Inter as a common, clean font
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { cn } from "@/lib/utils";
-// Toaster can be here or in a more specific layout like (app)/layout.tsx
-// For this app, (app)/layout.tsx handles Toaster for authenticated routes.
+import { AuthProvider } from '@/contexts/auth-context';
+import { Toaster } from "@/components/ui/toaster"; // Moved Toaster here for global access including login/signup
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -24,7 +24,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background font-sans antialiased", fontSans.variable)}>
-        {children}
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );
