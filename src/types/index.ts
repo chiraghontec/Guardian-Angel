@@ -39,8 +39,8 @@ export interface WeeklyActivityRecord {
   day: string; // e.g., "Mon", "Tue"
   steps?: number;
   calories?: number;
-  distance?: number;
-  activeMinutes?: number;
+  distance?: number; // Added for consistency with CsvActivityRecord
+  activeMinutes?: number; // Added for consistency
 }
 
 export interface HeartRateData {
@@ -65,19 +65,16 @@ export type LoginFormInputs = {
 
 export type SignupFormInputs = {
   parentName: string;
-  childName: string; // Consider making this optional or handling its storage separately
+  childName: string; 
   email: string;
   password: string;
 };
 
-// Example Zod schema for reference if needed elsewhere, though defined in pages
-// export const loginFormSchema = z.object({
-//   email: z.string().email(),
-//   password: z.string().min(6),
-// });
-// export const signupFormSchema = z.object({
-//   parentName: z.string().min(2),
-//   childName: z.string().min(1), // Or optional: z.string().optional()
-//   email: z.string().email(),
-//   password: z.string().min(6),
-// });
+// Data from uploaded CSV
+export interface CsvActivityRecord {
+  Date: string; // Expects YYYY-MM-DD or a parsable date string
+  Steps?: number;
+  Calories?: number;
+  Distance?: number; // in km
+  ActiveMinutes?: number; // in minutes
+}
