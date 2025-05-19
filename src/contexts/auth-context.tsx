@@ -14,7 +14,9 @@ import {
 import { auth } from '@/lib/firebase/config';
 import { useRouter, usePathname } from 'next/navigation';
 import type { LoginFormInputs, SignupFormInputs } from '@/types';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading UI
+import { Skeleton } from '@/components/ui/skeleton';
+
+const CHILD_NAME_LOCAL_STORAGE_KEY = 'guardianAngelChildName';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -24,7 +26,7 @@ interface AuthContextType {
   login: (data: LoginFormInputs) => Promise<void>;
   signup: (data: SignupFormInputs) => Promise<void>;
   logout: () => Promise<void>;
-  childNameContext: string | null; // Store childName from signup
+  childNameContext: string | null;
   setChildNameContext: Dispatch<SetStateAction<string | null>>;
 }
 
@@ -34,23 +36,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [childNameContext, setChildNameContext] = useState<string | null>(null); // For child's name
+  const [childNameContext, setChildNameContext] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(CHILD_NAME_LOCAL_STORAGE_KEY);
+    }
+    return null;
+  });
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      if (user && !childNameContext) { // If user logged in but no childName in state, try to load from localStorage
+        const storedName = localStorage.getItem(CHILD_NAME_LOCAL_STORAGE_KEY);
+        if (storedName) setChildNameContext(storedName);
+      }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // childNameContext removed from deps to avoid re-triggering auth state change
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (childNameContext) {
+        localStorage.setItem(CHILD_NAME_LOCAL_STORAGE_KEY, childNameContext);
+      } else {
+        localStorage.removeItem(CHILD_NAME_LOCAL_STORAGE_KEY);
+      }
+    }
+  }, [childNameContext]);
 
   const login = async (data: LoginFormInputs) => {
     setLoading(true);
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, data.email, data.password);
+      // childName should be loaded from localStorage by onAuthStateChanged effect
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to login.');
@@ -66,12 +89,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       if (userCredential.user) {
-        await updateProfile(userCredential.user, {
-          displayName: data.parentName,
-        });
-        // Store childName in context (in a real app, this might go to Firestore)
-        setChildNameContext(data.childName); 
-        setCurrentUser(auth.currentUser); // Refresh user state
+        await updateProfile(userCredential.user, { displayName: data.parentName });
+        setChildNameContext(data.childName); // This will also save to localStorage
+        setCurrentUser(auth.currentUser); 
       }
       router.push('/dashboard');
     } catch (err: any) {
@@ -87,7 +107,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     try {
       await firebaseSignOut(auth);
-      setChildNameContext(null); // Clear childName on logout
+      setChildNameContext(null); // Clear childName on logout (also removes from localStorage)
+      // Clear alerts from local storage on logout as they are user-specific conceptually
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('guardianAngelAlerts');
+      }
       router.push('/login');
     } catch (err: any) {
       setError(err.message || 'Failed to logout.');
@@ -97,7 +121,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
-  // Route protection logic
   useEffect(() => {
     if (!loading && !currentUser && pathname !== '/login' && pathname !== '/signup') {
       router.push('/login');
@@ -106,7 +129,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.push('/dashboard');
     }
   }, [currentUser, loading, pathname, router]);
-
 
   const value = {
     currentUser,
@@ -120,7 +142,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setChildNameContext,
   };
 
-  // Show a loading screen for the entire app while auth state is resolving
   if (loading && (pathname !== '/login' && pathname !== '/signup')) {
      return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -133,7 +154,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       </div>
     );
   }
-
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

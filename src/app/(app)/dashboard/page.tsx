@@ -2,17 +2,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Footprints, Flame, Milestone, Activity as ActivityIcon } from 'lucide-react';
+import Link from 'next/link';
+import { Footprints, Flame, Milestone, Activity as ActivityIcon, TrendingUp, ShieldAlert, Info } from 'lucide-react';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { ActivityChart } from '@/components/dashboard/activity-chart';
-import type { ActivityMetric, CsvActivityRecord, WeeklyActivityRecord } from '@/types';
+import type { ActivityMetric, WeeklyActivityRecord, FitbitDeviceData, AppAlert } from '@/types';
 import { DEFAULT_ACTIVITY_GOALS } from '@/lib/constants';
 import { useAuth } from '@/contexts/auth-context';
-import { parseActivityCsv } from '@/lib/csv-utils';
 import { format, subDays, parseISO } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
-const LOCAL_STORAGE_CSV_KEY = 'guardianAngelCsvActivityData';
 
 export default function DashboardPage() {
   const { currentUser, childNameContext } = useAuth();
@@ -20,176 +23,122 @@ export default function DashboardPage() {
   
   const [dashboardMetrics, setDashboardMetrics] = useState<ActivityMetric[]>([]);
   const [weeklyChartData, setWeeklyChartData] = useState<WeeklyActivityRecord[]>([]);
-  const [isLoadingCsvData, setIsLoadingCsvData] = useState(true);
-  const [lastCsvUpdate, setLastCsvUpdate] = useState<string | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [lastFitbitUpdate, setLastFitbitUpdate] = useState<string | null>(null);
+  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
+  const [fitbitData, setFitbitData] = useState<FitbitDeviceData | null>(null); // Store fetched fitbit data
 
   useEffect(() => {
     setCurrentChildName(childNameContext || "your child");
   }, [childNameContext]);
 
   const getDefaultMetrics = useCallback((child: string): ActivityMetric[] => [
-    {
-      id: 'steps',
-      label: `Steps (${child})`,
-      value: 0,
-      goal: DEFAULT_ACTIVITY_GOALS.steps,
-      unit: 'steps',
-      icon: Footprints,
-      color: 'hsl(var(--primary))',
-    },
-    {
-      id: 'calories',
-      label: `Calories Burned (${child})`,
-      value: 0,
-      goal: DEFAULT_ACTIVITY_GOALS.calories,
-      unit: 'kcal',
-      icon: Flame,
-      color: 'hsl(var(--accent))',
-    },
-    {
-      id: 'distance',
-      label: `Distance Walked (${child})`,
-      value: 0,
-      goal: DEFAULT_ACTIVITY_GOALS.distance,
-      unit: 'km',
-      icon: Milestone,
-      color: 'hsl(var(--secondary))',
-    },
-    {
-      id: 'activeMinutes',
-      label: `Active Minutes (${child})`,
-      value: 0,
-      goal: DEFAULT_ACTIVITY_GOALS.activeMinutes,
-      unit: 'min',
-      icon: ActivityIcon,
-      color: 'hsl(var(--chart-4))',
-    },
+    { id: 'steps', label: `Steps (${child})`, value: 0, goal: DEFAULT_ACTIVITY_GOALS.steps, unit: 'steps', icon: Footprints, color: 'hsl(var(--primary))' },
+    { id: 'calories', label: `Calories Burned (${child})`, value: 0, goal: DEFAULT_ACTIVITY_GOALS.calories, unit: 'kcal', icon: Flame, color: 'hsl(var(--accent))' },
+    { id: 'distance', label: `Distance Walked (${child})`, value: 0, goal: DEFAULT_ACTIVITY_GOALS.distance, unit: 'km', icon: Milestone, color: 'hsl(var(--secondary))' },
+    { id: 'activeMinutes', label: `Active Minutes (${child})`, value: 0, goal: DEFAULT_ACTIVITY_GOALS.activeMinutes, unit: 'min', icon: ActivityIcon, color: 'hsl(var(--chart-4))' },
+    { id: 'restingHeartRate', label: `Resting HR (${child})`, value: '--', unit: 'BPM', icon: TrendingUp, color: 'hsl(var(--chart-2))' },
   ], []);
 
-  const processAndSetData = useCallback((csvText: string | null) => {
-    if (csvText) {
-      const parsedData = parseActivityCsv(csvText);
-      if (parsedData.length > 0) {
-        // Data for Metric Cards (latest entry)
-        const latestRecord = parsedData[0]; // Assumes parseActivityCsv sorts by date descending
+  const processAndSetFitbitData = useCallback((data: FitbitDeviceData | null) => {
+    if (data) {
+      setFitbitData(data); // Store fetched data
+      setDashboardMetrics([
+        { id: 'steps', label: `Steps (${currentChildName})`, value: data.dailySteps, goal: DEFAULT_ACTIVITY_GOALS.steps, unit: 'steps', icon: Footprints, color: 'hsl(var(--primary))' },
+        { id: 'calories', label: `Calories Burned (${currentChildName})`, value: Math.floor(data.dailySteps * 0.045), goal: DEFAULT_ACTIVITY_GOALS.calories, unit: 'kcal', icon: Flame, color: 'hsl(var(--accent))' },
+        { id: 'distance', label: `Distance Walked (${currentChildName})`, value: parseFloat((data.dailySteps * 0.000762).toFixed(1)), goal: DEFAULT_ACTIVITY_GOALS.distance, unit: 'km', icon: Milestone, color: 'hsl(var(--secondary))' },
+        { id: 'activeMinutes', label: `Active Minutes (${currentChildName})`, value: Math.floor(data.dailySteps / 100), goal: DEFAULT_ACTIVITY_GOALS.activeMinutes, unit: 'min', icon: ActivityIcon, color: 'hsl(var(--chart-4))' },
+        { id: 'restingHeartRate', label: `Resting HR (${currentChildName})`, value: data.restingHeartRate ? `${data.restingHeartRate}` : '--', unit: 'BPM', icon: TrendingUp, color: 'hsl(var(--chart-2))' },
+      ]);
+      setLastFitbitUpdate(`Fitbit data from: ${format(new Date(data.lastUpdated), 'MMM d, h:mm a')}`);
 
-        setDashboardMetrics([
-          {
-            id: 'steps', label: `Steps (${currentChildName})`, 
-            value: latestRecord.Steps ?? 0, goal: DEFAULT_ACTIVITY_GOALS.steps, unit: 'steps', icon: Footprints, color: 'hsl(var(--primary))'
-          },
-          { 
-            id: 'calories', label: `Calories Burned (${currentChildName})`, 
-            value: latestRecord.Calories ?? 0, goal: DEFAULT_ACTIVITY_GOALS.calories, unit: 'kcal', icon: Flame, color: 'hsl(var(--accent))'
-          },
-          { 
-            id: 'distance', label: `Distance Walked (${currentChildName})`, 
-            value: latestRecord.Distance ?? 0, goal: DEFAULT_ACTIVITY_GOALS.distance, unit: 'km', icon: Milestone, color: 'hsl(var(--secondary))'
-          },
-          { 
-            id: 'activeMinutes', label: `Active Minutes (${currentChildName})`, 
-            value: latestRecord.ActiveMinutes ?? 0, goal: DEFAULT_ACTIVITY_GOALS.activeMinutes, unit: 'min', icon: ActivityIcon, color: 'hsl(var(--chart-4))'
-          },
-        ]);
-        setLastCsvUpdate(`Latest CSV data from: ${latestRecord.Date}`);
-
-        // Data for Weekly Chart (last 7 days)
-        const today = new Date();
-        const sevenDaysAgo = subDays(today, 6); // includes today
-        const weeklyDataMap = new Map<string, WeeklyActivityRecord>();
-
-        for (let i = 0; i < 7; i++) {
-          const day = subDays(today, i);
-          const formattedDay = format(day, 'yyyy-MM-dd');
-          const dayShortName = format(day, 'E'); // Mon, Tue, etc.
-          weeklyDataMap.set(formattedDay, { day: dayShortName, steps: 0, calories: 0, distance: 0, activeMinutes: 0 });
-        }
-        
-        parsedData.forEach(record => {
-          try {
-            const recordDate = parseISO(record.Date); // parse YYYY-MM-DD string
-             if (recordDate >= sevenDaysAgo && recordDate <= today) {
-                const formattedDay = format(recordDate, 'yyyy-MM-dd');
-                const existing = weeklyDataMap.get(formattedDay);
-                if (existing) {
-                    existing.steps = (existing.steps || 0) + (record.Steps || 0);
-                    existing.calories = (existing.calories || 0) + (record.Calories || 0);
-                    existing.distance = (existing.distance || 0) + (record.Distance || 0);
-                    existing.activeMinutes = (existing.activeMinutes || 0) + (record.ActiveMinutes || 0);
-                }
-            }
-          } catch(e) {
-            console.error("Error parsing date from CSV record:", record.Date, e);
-          }
-        });
-        
-        const chartData = Array.from(weeklyDataMap.values()).sort((a,b) => 
-            new Date(Object.keys(weeklyDataMap).find(key => weeklyDataMap.get(key) === a)!).getTime() - 
-            new Date(Object.keys(weeklyDataMap).find(key => weeklyDataMap.get(key) === b)!).getTime()
-        );
-        setWeeklyChartData(chartData);
-        
-      } else {
-        // CSV was empty or unparseable
-        setDashboardMetrics(getDefaultMetrics(currentChildName));
-        setWeeklyChartData(generatePlaceholderWeeklyData());
-        setLastCsvUpdate("No valid data in uploaded CSV.");
-      }
+      // Placeholder for weekly chart data
+      const placeholderWeekly: WeeklyActivityRecord[] = Array.from({length: 7}).map((_, i) => {
+        const day = subDays(new Date(), 6 - i);
+        return {
+          day: format(day, 'E'),
+          steps: Math.floor(Math.random() * 7000) + 3000,
+          calories: Math.floor(Math.random() * 300) + 200,
+        };
+      });
+      setWeeklyChartData(placeholderWeekly);
+      
     } else {
-      // No CSV data in localStorage
       setDashboardMetrics(getDefaultMetrics(currentChildName));
       setWeeklyChartData(generatePlaceholderWeeklyData());
-      setLastCsvUpdate(null);
+      setLastFitbitUpdate("Could not fetch Fitbit data.");
     }
-    setIsLoadingCsvData(false);
+    setIsLoadingData(false);
   }, [currentChildName, getDefaultMetrics]);
+  
+  const fetchAlertsData = useCallback(() => {
+    const storedAlertsRaw = localStorage.getItem('guardianAngelAlerts');
+    if (storedAlertsRaw) {
+      try {
+        const allAlerts: AppAlert[] = JSON.parse(storedAlertsRaw);
+        setActiveAlertsCount(allAlerts.filter(a => a.status === 'active').length);
+      } catch (e) { console.error("Error parsing alerts for dashboard", e); setActiveAlertsCount(0); }
+    } else {
+      setActiveAlertsCount(0);
+    }
+  }, []);
 
-  // Effect for loading data from localStorage and setting up interval
+
   useEffect(() => {
-    const loadAndProcessData = () => {
-      setIsLoadingCsvData(true);
-      const csvText = localStorage.getItem(LOCAL_STORAGE_CSV_KEY);
-      processAndSetData(csvText);
+    const loadInitialData = async () => {
+      setIsLoadingData(true);
+      try {
+        const response = await fetch('/api/health-data');
+        if (!response.ok) throw new Error('Failed to fetch health data');
+        const data: FitbitDeviceData = await response.json();
+        processAndSetFitbitData(data);
+      } catch (error) {
+        console.error(error);
+        processAndSetFitbitData(null);
+      }
+      fetchAlertsData();
     };
 
-    loadAndProcessData(); // Initial load
+    loadInitialData();
+    const intervalId = setInterval(async () => {
+       try {
+        const response = await fetch('/api/health-data');
+        if (!response.ok) throw new Error('Failed to fetch health data periodically');
+        const data: FitbitDeviceData = await response.json();
+        processAndSetFitbitData(data);
+      } catch (error) {
+        console.error(error);
+      }
+      fetchAlertsData();
+    }, 30000);
 
-    const intervalId = setInterval(loadAndProcessData, 30000); // Poll every 30 seconds
-
-    return () => clearInterval(intervalId); // Cleanup interval on unmount
-  }, [processAndSetData]);
+    return () => clearInterval(intervalId);
+  }, [processAndSetFitbitData, fetchAlertsData]);
   
-  // Update metrics if childName changes
   useEffect(() => {
-    if (!localStorage.getItem(LOCAL_STORAGE_CSV_KEY)) { // Only if no CSV data, reset to default with new name
+    if (!fitbitData) { 
        setDashboardMetrics(getDefaultMetrics(currentChildName));
     } else {
-       // If CSV data exists, re-process it to update labels with the new child name
-       const csvText = localStorage.getItem(LOCAL_STORAGE_CSV_KEY);
-       processAndSetData(csvText); // This will use the new currentChildName in labels
+        processAndSetFitbitData(fitbitData); 
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentChildName, getDefaultMetrics]);
+  }, [currentChildName, getDefaultMetrics, fitbitData, processAndSetFitbitData]);
 
 
   const generatePlaceholderWeeklyData = (): WeeklyActivityRecord[] => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     return days.map(day => ({
       day,
-      steps: Math.floor(Math.random() * 5000) + 5000, // Random steps between 5000-10000
-      calories: Math.floor(Math.random() * 200) + 200, // Random calories 200-400
+      steps: Math.floor(Math.random() * 5000) + 5000,
+      calories: Math.floor(Math.random() * 200) + 200,
     }));
   };
 
-  if (isLoadingCsvData && dashboardMetrics.length === 0) {
+  if (isLoadingData && dashboardMetrics.length === 0) {
     return (
       <div className="space-y-8">
-        <div>
-          <Skeleton className="h-10 w-1/3 mb-1" />
-          <Skeleton className="h-4 w-2/3" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div><Skeleton className="h-10 w-1/3 mb-1" /><Skeleton className="h-4 w-2/3" /></div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          {[...Array(5)].map((_, i) => (
             <Card key={i}><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent><Skeleton className="h-8 w-1/2 mb-1" /><Skeleton className="h-6 w-full" /></CardContent></Card>
           ))}
         </div>
@@ -205,15 +154,45 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center">
             <p className="text-muted-foreground">
             Welcome back, {currentUser?.displayName || currentUser?.email || 'Parent'}! 
-            Here's an overview of {currentChildName}'s activity.
+            Here's an overview of {currentChildName}'s activity and wellbeing.
+            {/* In a real app, activeAlertsCount would come from a Firestore onSnapshot listener. */}
             </p>
-            {lastCsvUpdate && (
-                <p className="text-xs text-muted-foreground">Data Source: {lastCsvUpdate}</p>
+            {lastFitbitUpdate && (
+                <p className="text-xs text-muted-foreground">Data Source: {lastFitbitUpdate}</p>
             )}
         </div>
       </div>
+      
+      <Card className={cn("shadow-lg", activeAlertsCount > 0 ? "border-destructive bg-destructive/5 hover:border-destructive/80" : "border-primary bg-primary/5 hover:border-primary/80")}>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center">
+              {activeAlertsCount > 0 ? <ShieldAlert className="h-6 w-6 mr-2 text-destructive" /> : <Info className="h-6 w-6 mr-2 text-primary"/>}
+              Active Alerts
+            </CardTitle>
+            <CardDescription>
+              {activeAlertsCount > 0 
+                ? `There are ${activeAlertsCount} active alert(s) for ${currentChildName}.`
+                : `No active alerts for ${currentChildName}. System is clear.`}
+            </CardDescription>
+          </div>
+           <Link href="/alerts">
+            <Button variant={activeAlertsCount > 0 ? "destructive" : "default"} size="sm">View Alerts</Button>
+          </Link>
+        </CardHeader>
+        {activeAlertsCount > 0 && (
+           <CardContent>
+             <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4"/>
+                <AlertTitle>Attention Required</AlertTitle>
+                <AlertDescription>Please review the active alerts on the Alerts page.</AlertDescription>
+             </Alert>
+           </CardContent>
+        )}
+      </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {dashboardMetrics.map((metric) => (
           <MetricCard key={metric.id} metric={metric} />
         ))}
@@ -225,3 +204,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

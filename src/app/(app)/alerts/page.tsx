@@ -2,46 +2,50 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { BullyingDetectionForm } from '@/components/alerts/bullying-detection-form';
-import { IncidentItem } from '@/components/alerts/incident-item';
-import type { BullyingIncident } from '@/types';
+import { TextAnalysisForm } from '@/components/alerts/bullying-detection-form'; // Now TextAnalysisForm
+import { AlertItem } from '@/components/alerts/alert-item'; // Renamed from IncidentItem
+import type { AppAlert } from '@/types'; // Updated type
 import { Accordion } from "@/components/ui/accordion";
-import type { DetectBullyingOutput } from "@/ai/flows/detect-bullying";
+import type { AnalyzeTextContentOutput } from "@/ai/flows/analyze-text-content"; // Updated import
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useAuth } from '@/contexts/auth-context'; // Use auth context
+import { useAuth } from '@/contexts/auth-context';
 
-// Check for SpeechRecognition API
 const SpeechRecognition = (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition));
 
+// Constants for alert generation (simulated for Fitbit data)
+const HIGH_HR_THRESHOLD = 120; // Example threshold for high heart rate (BPM)
+const LOW_SPO2_THRESHOLD = 92; // Example threshold for low SpO2 (%)
+
 export default function AlertsPage() {
-  const [incidents, setIncidents] = useState<BullyingIncident[]>([]);
+  const [alerts, setAlerts] = useState<AppAlert[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
   const [recognitionInstance, setRecognitionInstance] = useState<SpeechRecognition | null>(null);
   const { toast } = useToast();
-  const { childNameContext } = useAuth(); // Get childName from context
+  const { childNameContext } = useAuth();
 
   const currentChildName = childNameContext || "your child";
 
   useEffect(() => {
     setIsClient(true);
-    const storedIncidents = localStorage.getItem('bullyingIncidents');
-    if (storedIncidents) {
+    const storedAlerts = localStorage.getItem('guardianAngelAlerts'); // Changed key
+    if (storedAlerts) {
       try {
-        const parsedIncidents: BullyingIncident[] = JSON.parse(storedIncidents).map((inc: any) => ({
-          ...inc,
-          timestamp: new Date(inc.timestamp)
+        const parsedAlerts: AppAlert[] = JSON.parse(storedAlerts).map((alert: any) => ({
+          ...alert,
+          timestamp: new Date(alert.timestamp),
+          resolvedAt: alert.resolvedAt ? new Date(alert.resolvedAt) : undefined,
         }));
-        setIncidents(parsedIncidents);
+        setAlerts(parsedAlerts);
       } catch (error) {
-        console.error("Failed to parse incidents from localStorage", error);
-        localStorage.removeItem('bullyingIncidents');
+        console.error("Failed to parse alerts from localStorage", error);
+        localStorage.removeItem('guardianAngelAlerts');
       }
     }
 
@@ -61,63 +65,38 @@ export default function AlertsPage() {
             interimTranscript += event.results[i][0].transcript;
           }
         }
-        // Prefer final transcript, fallback to building up if needed.
-        // For this use case, let's prioritize the most recent final transcript.
         if (finalTranscript.trim()) {
              setTranscript(finalTranscript);
         } else if (interimTranscript.trim()) {
-            // Update with interim if no final yet, or if continuous was true.
-            // This logic could be refined based on desired UX for ongoing speech.
-             setTranscript(prev => {
-                // A simple append might be too noisy. Let's replace for now.
-                // Or try a smarter merge if needed.
-                return interimTranscript; 
-             });
+             setTranscript(prev => interimTranscript);
         }
       };
 
       recognition.onerror = (event) => {
         let errorMsg = "Speech recognition error.";
-        if (event.error === 'no-speech') {
-          errorMsg = "No speech was detected. Please try again.";
-        } else if (event.error === 'audio-capture') {
-          errorMsg = "Audio capture failed. Ensure microphone is working.";
-        } else if (event.error === 'not-allowed') {
-          errorMsg = "Microphone access denied. Please allow microphone access in your browser settings.";
-        } else if (event.error === 'network') {
-          errorMsg = "Network error during speech recognition. Please check your connection.";
-        }
+        if (event.error === 'no-speech') errorMsg = "No speech was detected.";
+        else if (event.error === 'audio-capture') errorMsg = "Audio capture failed. Ensure microphone is working.";
+        else if (event.error === 'not-allowed') errorMsg = "Microphone access denied.";
         setSpeechError(errorMsg);
         toast({ title: "Speech Error", description: errorMsg, variant: "destructive" });
         setIsListening(false);
       };
 
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-      
+      recognition.onend = () => setIsListening(false);
       setRecognitionInstance(recognition);
-    } else if (isClient) { // Only set error if on client and API is missing
+    } else if (typeof window !== 'undefined') { // only set error if on client
       setSpeechError("Speech recognition is not supported by your browser.");
     }
-
-    return () => {
-      if (recognitionInstance) {
-        recognitionInstance.stop();
-      }
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient]); 
+  }, []); // Removed isClient from deps as it's set once
 
   const toggleListening = useCallback(() => {
     if (!SpeechRecognition || !recognitionInstance) {
       toast({ title: "Unsupported", description: "Speech recognition not available.", variant: "destructive" });
       return;
     }
-
     if (isListening) {
       recognitionInstance.stop();
-      setIsListening(false);
     } else {
       setTranscript(""); 
       setSpeechError(null);
@@ -125,8 +104,7 @@ export default function AlertsPage() {
         recognitionInstance.start();
         setIsListening(true);
       } catch (error) {
-        console.error("Error starting speech recognition:", error);
-        setSpeechError("Could not start speech recognition. Ensure microphone permissions are granted.");
+        setSpeechError("Could not start speech recognition.");
         toast({ title: "Error", description: "Could not start speech recognition.", variant: "destructive" });
         setIsListening(false);
       }
@@ -135,38 +113,86 @@ export default function AlertsPage() {
 
   useEffect(() => {
     if(isClient) {
-      localStorage.setItem('bullyingIncidents', JSON.stringify(incidents));
+      // In a real app with Firestore, this effect would be replaced by onSnapshot listeners
+      // or specific writes to Firestore. For now, we ensure localStorage is up-to-date.
+      localStorage.setItem('guardianAngelAlerts', JSON.stringify(alerts));
     }
-  }, [incidents, isClient]);
+  }, [alerts, isClient]);
 
-  const handleNewDetection = (result: DetectBullyingOutput & { originalText: string }) => {
-    const newIncident: BullyingIncident = {
-      id: new Date().toISOString() + Math.random().toString(36).substring(2,9),
-      timestamp: new Date(),
-      text: result.originalText,
-      severity: result.severity,
-      isBullying: result.isBullying,
-      explanation: result.explanation,
-    };
-    setIncidents(prevIncidents => [newIncident, ...prevIncidents]);
-    setTranscript(""); 
+  const handleNewAIDetection = (result: AnalyzeTextContentOutput & { originalText: string }) => {
+    const newAlertsList: AppAlert[] = [];
+    const baseId = new Date().toISOString() + Math.random().toString(36).substring(2,9);
+
+    if (result.isBullying) {
+      newAlertsList.push({
+        id: `${baseId}-bullying`,
+        timestamp: new Date(),
+        type: 'ai_bullying',
+        title: 'Potential Bullying Detected',
+        description: result.originalText,
+        severity: result.bullyingSeverity,
+        status: 'active',
+        details: { explanation: result.explanation, originalText: result.originalText },
+      });
+    }
+    if (result.isDepressive) {
+       newAlertsList.push({
+        id: `${baseId}-depressive`,
+        timestamp: new Date(),
+        type: 'ai_depressive',
+        title: 'Potential Depressive Content Detected',
+        description: result.originalText,
+        severity: result.depressiveSeverity,
+        status: 'active',
+        details: { explanation: result.explanation, originalText: result.originalText },
+      });
+    }
+
+    if (newAlertsList.length > 0) {
+       setAlerts(prevAlerts => [...newAlertsList, ...prevAlerts]);
+    }
+    setTranscript("");
   };
+  
+  const handleResolveToggle = (alertId: string) => {
+    setAlerts(prevAlerts =>
+      prevAlerts.map(alert =>
+        alert.id === alertId
+          ? { 
+              ...alert, 
+              status: alert.status === 'active' ? 'resolved' : 'active',
+              resolvedAt: alert.status === 'active' ? new Date() : undefined
+            }
+          : alert
+      )
+    );
+     toast({
+      title: "Alert Updated",
+      description: `Alert status changed.`,
+    });
+  };
+
 
   if (!isClient) {
     return (
       <div className="space-y-8">
-        <h1 className="text-3xl font-bold tracking-tight">Bullying Alerts</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Alerts</h1>
         <p className="text-muted-foreground">Loading alerts for {currentChildName}...</p>
       </div>
     );
   }
+  
+  const activeAlerts = alerts.filter(a => a.status === 'active').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const resolvedAlerts = alerts.filter(a => a.status === 'resolved').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+
 
   return (
     <div className="space-y-8 h-full flex flex-col">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Bullying Alerts</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Alerts</h1>
         <p className="text-muted-foreground">
-          Monitor and analyze potential bullying incidents for {currentChildName}.
+          Monitor and analyze potential incidents and health alerts for {currentChildName}.
+          {/* In a real app, data would be from Firestore. Alerts are stored in localStorage for this prototype. */}
         </p>
       </div>
       
@@ -198,21 +224,38 @@ export default function AlertsPage() {
         </div>
       )}
       
-      <BullyingDetectionForm 
-        onNewDetection={handleNewDetection} 
+      <TextAnalysisForm 
+        onNewDetection={handleNewAIDetection} 
         currentTranscript={transcript}
         onTranscriptConsumed={() => setTranscript("")}
       />
 
       <div className="flex-grow flex flex-col min-h-0 mt-8">
-        <h2 className="text-2xl font-semibold tracking-tight mb-4">Incident History</h2>
-        {incidents.length === 0 ? (
-          <p className="text-muted-foreground">No incidents recorded yet.</p>
+        <h2 className="text-2xl font-semibold tracking-tight mb-2">Active Alerts ({activeAlerts.length})</h2>
+        {activeAlerts.length === 0 ? (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4"/>
+            <AlertTitle>No Active Alerts</AlertTitle>
+            <AlertDescription>Currently, there are no active alerts for {currentChildName}.</AlertDescription>
+          </Alert>
         ) : (
-          <ScrollArea className="flex-grow pr-4">
+          <ScrollArea className="flex-grow pr-4 max-h-[40vh]">
             <Accordion type="single" collapsible className="w-full space-y-2">
-              {incidents.map((incident) => (
-                <IncidentItem key={incident.id} incident={incident} />
+              {activeAlerts.map((alert) => (
+                <AlertItem key={alert.id} alert={alert} onResolveToggle={handleResolveToggle} />
+              ))}
+            </Accordion>
+          </ScrollArea>
+        )}
+
+        <h2 className="text-2xl font-semibold tracking-tight mt-6 mb-2">Resolved Alerts ({resolvedAlerts.length})</h2>
+         {resolvedAlerts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No alerts have been resolved yet.</p>
+        ) : (
+          <ScrollArea className="flex-grow pr-4 max-h-[30vh]">
+            <Accordion type="single" collapsible className="w-full space-y-2">
+              {resolvedAlerts.map((alert) => (
+                <AlertItem key={alert.id} alert={alert} onResolveToggle={handleResolveToggle} />
               ))}
             </Accordion>
           </ScrollArea>

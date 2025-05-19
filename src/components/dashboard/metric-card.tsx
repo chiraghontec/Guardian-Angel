@@ -9,7 +9,9 @@ interface MetricCardProps {
 }
 
 export function MetricCard({ metric }: MetricCardProps) {
-  const progressValue = Math.min((metric.value / metric.goal) * 100, 100);
+  const progressValue = (typeof metric.value === 'number' && metric.goal) 
+    ? Math.min((metric.value / metric.goal) * 100, 100) 
+    : undefined;
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -21,13 +23,22 @@ export function MetricCard({ metric }: MetricCardProps) {
       </CardHeader>
       <CardContent>
         <div className="text-3xl font-bold" style={{color: metric.color ? metric.color : 'hsl(var(--foreground))'}}>
-          {metric.value.toLocaleString()}
+          {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
           <span className="text-sm font-normal text-muted-foreground ml-1">{metric.unit}</span>
         </div>
-        <Progress value={progressValue} className="mt-2 h-2" indicatorClassName={metric.color ? `bg-[${metric.color}]` : ''} />
-        <p className="text-xs text-muted-foreground mt-1">
-          Goal: {metric.goal.toLocaleString()} {metric.unit}
-        </p>
+        {progressValue !== undefined && metric.goal && (
+          <>
+            <Progress value={progressValue} className="mt-2 h-2" indicatorClassName={metric.color ? `bg-[${metric.color}]` : ''} />
+            <p className="text-xs text-muted-foreground mt-1">
+              Goal: {metric.goal.toLocaleString()} {metric.unit}
+            </p>
+          </>
+        )}
+         {progressValue === undefined && !metric.goal && ( // If no goal, don't show progress bar or goal text
+            <p className="text-xs text-muted-foreground mt-1 h-[calc(0.5rem+0.25rem+theme(fontSize.xs))]"> {/* Placeholder for height consistency */}
+              {/* Can add specific text here if needed, e.g. "Daily average" */}
+            </p>
+        )}
       </CardContent>
     </Card>
   );

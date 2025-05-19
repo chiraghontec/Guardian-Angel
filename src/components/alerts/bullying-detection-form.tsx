@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { detectBullying, type DetectBullyingOutput } from "@/ai/flows/detect-bullying";
-import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { analyzeTextContent, type AnalyzeTextContentOutput } from "@/ai/flows/analyze-text-content"; // Updated import
+import { Loader2, AlertTriangle, CheckCircle2, MessageCircleWarning, BrainCircuit } from "lucide-react";
 
 const FormSchema = z.object({
   text: z.string().min(10, {
@@ -21,19 +21,19 @@ const FormSchema = z.object({
   }),
 });
 
-interface BullyingDetectionFormProps {
-  onNewDetection: (result: DetectBullyingOutput & { originalText: string }) => void;
+interface TextAnalysisFormProps {
+  onNewDetection: (result: AnalyzeTextContentOutput & { originalText: string }) => void;
   currentTranscript?: string;
   onTranscriptConsumed?: () => void;
 }
 
-export function BullyingDetectionForm({ 
+export function TextAnalysisForm({ 
   onNewDetection, 
   currentTranscript,
   onTranscriptConsumed 
-}: BullyingDetectionFormProps) {
+}: TextAnalysisFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<DetectBullyingOutput | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalyzeTextContentOutput | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -53,20 +53,38 @@ export function BullyingDetectionForm({
     setIsLoading(true);
     setAnalysisResult(null);
     try {
-      const result = await detectBullying({ text: data.text });
+      const result = await analyzeTextContent({ text: data.text }); // Updated function call
       setAnalysisResult(result);
       onNewDetection({ ...result, originalText: data.text });
+      
+      let toastTitle = "Analysis Complete";
+      let toastDescription = "Content analyzed.";
+      let toastVariant: "default" | "destructive" = "default";
+
+      if (result.isBullying && result.isDepressive) {
+        toastDescription = "Potential bullying and depressive content detected.";
+        toastVariant = "destructive";
+      } else if (result.isBullying) {
+        toastDescription = "Potential bullying detected.";
+        toastVariant = "destructive";
+      } else if (result.isDepressive) {
+        toastDescription = "Potential depressive content detected.";
+        toastVariant = "destructive"; // Or a different variant for depressive content
+      } else {
+        toastDescription = "No significant concerns detected.";
+      }
+
       toast({
-        title: "Analysis Complete",
-        description: result.isBullying ? "Potential bullying detected." : "No bullying detected.",
-        variant: result.isBullying ? "destructive" : "default",
+        title: toastTitle,
+        description: toastDescription,
+        variant: toastVariant,
       });
-      form.reset({ text: "" }); // Clear form after submission
+      form.reset({ text: "" }); 
       if (onTranscriptConsumed) {
-        onTranscriptConsumed(); // Notify parent that transcript has been used
+        onTranscriptConsumed();
       }
     } catch (error) {
-      console.error("Error detecting bullying:", error);
+      console.error("Error analyzing text:", error);
       toast({
         title: "Error",
         description: "Failed to analyze text. Please try again.",
@@ -80,10 +98,10 @@ export function BullyingDetectionForm({
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle>Analyze Text for Bullying</CardTitle>
+        <CardTitle>Analyze Text Content</CardTitle>
         <CardDescription>
-          Enter text from SMS, social media, or other sources to check for potential bullying.
-          You can also use the "Speak to Analyze" button to input text via voice.
+          Enter text to check for potential bullying or depressive content.
+          You can also use the "Speak to Analyze" button.
         </CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -124,28 +142,44 @@ export function BullyingDetectionForm({
         </form>
       </Form>
       {analysisResult && !isLoading && (
-        <CardContent className="mt-4 border-t pt-4">
+        <CardContent className="mt-4 border-t pt-4 space-y-3">
           <h3 className="text-lg font-semibold mb-2">Analysis Result:</h3>
-          {analysisResult.isBullying ? (
-            <div className="p-4 rounded-md border border-destructive bg-destructive/10">
+          {analysisResult.isBullying && (
+            <div className="p-3 rounded-md border border-destructive bg-destructive/10">
               <div className="flex items-center text-destructive">
                 <AlertTriangle className="h-5 w-5 mr-2" />
                 <span className="font-semibold">Potential Bullying Detected</span>
               </div>
-              <p className="text-sm mt-1">Severity: {(analysisResult.severity * 100).toFixed(0)}%</p>
-              <p className="text-sm mt-1">Explanation: {analysisResult.explanation}</p>
-            </div>
-          ) : (
-            <div className="p-4 rounded-md border border-green-500 bg-green-500/10">
-               <div className="flex items-center text-green-600">
-                <CheckCircle2 className="h-5 w-5 mr-2" />
-                <span className="font-semibold">No Bullying Detected</span>
-              </div>
-              <p className="text-sm mt-1">Explanation: {analysisResult.explanation}</p>
+              <p className="text-sm mt-1">Severity: {(analysisResult.bullyingSeverity! * 100).toFixed(0)}%</p>
             </div>
           )}
+          {analysisResult.isDepressive && (
+            <div className="p-3 rounded-md border border-orange-500 bg-orange-500/10">
+              <div className="flex items-center text-orange-600">
+                <MessageCircleWarning className="h-5 w-5 mr-2" /> 
+                <span className="font-semibold">Potential Depressive Content Detected</span>
+              </div>
+              <p className="text-sm mt-1">Severity: {(analysisResult.depressiveSeverity! * 100).toFixed(0)}%</p>
+            </div>
+          )}
+          {!analysisResult.isBullying && !analysisResult.isDepressive && (
+             <div className="p-3 rounded-md border border-green-500 bg-green-500/10">
+               <div className="flex items-center text-green-600">
+                <CheckCircle2 className="h-5 w-5 mr-2" />
+                <span className="font-semibold">No Major Concerns Detected</span>
+              </div>
+            </div>
+          )}
+           <div className="p-3 rounded-md border bg-muted/50">
+              <div className="flex items-center text-foreground">
+                 <BrainCircuit className="h-5 w-5 mr-2 text-primary"/>
+                <span className="font-semibold">AI Explanation:</span>
+              </div>
+              <p className="text-sm mt-1">{analysisResult.explanation}</p>
+            </div>
         </CardContent>
       )}
     </Card>
   );
 }
+
