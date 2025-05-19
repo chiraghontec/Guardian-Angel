@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Footprints, Flame, Milestone, Activity as ActivityIcon, TrendingUp, ShieldAlert, Info } from 'lucide-react';
+import { Footprints, Flame, Milestone, Activity as ActivityIcon, TrendingUp, ShieldAlert, Info, AlertTriangle } from 'lucide-react';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { ActivityChart } from '@/components/dashboard/activity-chart';
 import type { ActivityMetric, WeeklyActivityRecord, FitbitDeviceData, AppAlert } from '@/types';
